@@ -5,10 +5,17 @@ camera = cv2.VideoCapture(0)
 if not camera.isOpened():
     raise RuntimeError("Could not open camera.")
 
-success, frame = camera.read()
+while True:
+    success, frame = camera.read()
+
+    if not success:
+        break
+
+    cv2.imshow("Camera", frame)
+    key = cv2.waitKey(1)
+
+    if key == ord("q"):
+        break
+
 camera.release()
-
-if not success:
-    raise RuntimeError("Could not capture a frame.")
-
-print(frame.shape)
+cv2.destroyAllWindows()
