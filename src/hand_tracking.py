@@ -20,12 +20,18 @@ if not camera.isOpened():
     raise RuntimeError("Could not open camera.")
 
 smoothing_factor = 0.2
+return_smoothing_factor = 0.05
 
 smoothed_pan = 0.0
 smoothed_tilt = 0.0
 servo_center = 90
 max_pan_offset = 60
 max_tilt_offset = 45
+
+# If camera loses sight of hands for => 2 seconds
+
+return_delay = 2.0
+last_hand_seen = time.monotonic()
 
 while True:
     success, frame = camera.read()
@@ -64,6 +70,7 @@ while True:
     )
 
     if result.hand_landmarks:
+        last_hand_seen = time.monotonic()
         hand = result.hand_landmarks[0]
         index_finger_tip = hand[8]
 
@@ -110,12 +117,6 @@ while True:
             + (1 - smoothing_factor) * smoothed_tilt
         )
 
-        pan_angle = servo_center + smoothed_pan * max_pan_offset
-        tilt_angle = servo_center - smoothed_tilt * max_tilt_offset
-
-        pan_angle = int(round(max(30, min(150, pan_angle))))
-        tilt_angle = int(round(max(45, min(135, tilt_angle))))
-
         cv2.line(
             frame,
             (center_x, center_y),
@@ -134,19 +135,32 @@ while True:
             2,
         )
 
-        cv2.putText(
-            frame,
-            f"Pan angle: {pan_angle:.2f}, Tilt: {tilt_angle:.2f}",
-            (20, 70),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (0, 255, 255),
-            2,
-        )
-
         frame_height, frame_width, _ = frame.shape
 
         cv2.circle(frame, (x, y), 12, (0, 255, 0), -1)
+
+    else:
+        seconds_without_hand = time.monotonic() - last_hand_seen
+
+        if seconds_without_hand >= return_delay:
+            smoothed_pan = (1 - return_smoothing_factor) * smoothed_pan
+            smoothed_tilt = (1 - return_smoothing_factor) * smoothed_tilt
+
+    pan_angle = servo_center + smoothed_pan * max_pan_offset
+    tilt_angle = servo_center - smoothed_tilt * max_tilt_offset
+
+    pan_angle = int(round(max(30, min(150, pan_angle))))
+    tilt_angle = int(round(max(45, min(135, tilt_angle))))
+
+    cv2.putText(
+        frame,
+        f"Pan angle: {pan_angle:.2f}, Tilt: {tilt_angle:.2f}",
+        (20, 70),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (0, 255, 255),
+        2,
+    )
 
     cv2.imshow("Camera", frame)
     key = cv2.waitKey(1)
