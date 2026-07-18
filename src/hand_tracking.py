@@ -81,6 +81,17 @@ while True:
         error_x = x - center_x
         error_y = y - center_y
 
+        pan_command = error_x / center_x
+        tilt_command = error_y / center_y
+
+        dead_zone = 0.05
+
+        if abs(pan_command) < dead_zone:
+            pan_command = 0.0
+
+        if abs(tilt_command) < dead_zone:
+            tilt_command = 0.0
+
         cv2.line(
             frame,
             (center_x, center_y),
@@ -96,6 +107,16 @@ while True:
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,
             (255, 255, 255),
+            2,
+        )
+
+        cv2.putText(
+            frame,
+            f"Pan: {pan_command:.3f}, Tilt: {tilt_command:.3f}",
+            (20, 70),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 255, 255),
             2,
         )
 
