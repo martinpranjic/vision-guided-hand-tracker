@@ -1,5 +1,5 @@
 import time
-
+import serial
 
 import cv2
 import mediapipe as mp
@@ -13,13 +13,31 @@ options = mp.tasks.vision.HandLandmarkerOptions(
 )
 
 hand_landmarker = mp.tasks.vision.HandLandmarker.create_from_options(options)
+serial_connection = serial.serial_for_url("loop://", timeout=1)
 
 camera = cv2.VideoCapture(0)
 
 if not camera.isOpened():
     raise RuntimeError("Could not open camera.")
 
+smoothing_factor = 0.2
+return_smoothing_factor = 0.05
+
+smoothed_pan = 0.0
+smoothed_tilt = 0.0
+servo_center = 90
+max_pan_offset = 60
+max_tilt_offset = 45
+
+# If camera loses sight of hands for => 2 seconds
+
+return_delay = 2.0
+last_hand_seen = time.monotonic()
+
 while True:
+    error_x = 0
+    error_y = 0
+
     success, frame = camera.read()
 
     if not success:
@@ -56,6 +74,7 @@ while True:
     )
 
     if result.hand_landmarks:
+        last_hand_seen = time.monotonic()
         hand = result.hand_landmarks[0]
         index_finger_tip = hand[8]
 
@@ -81,6 +100,27 @@ while True:
         error_x = x - center_x
         error_y = y - center_y
 
+        pan_command = error_x / center_x
+        tilt_command = error_y / center_y
+
+        dead_zone = 0.05
+
+        if abs(pan_command) < dead_zone:
+            pan_command = 0.0
+
+        if abs(tilt_command) < dead_zone:
+            tilt_command = 0.0
+
+        smoothed_pan = (
+            smoothing_factor * pan_command
+            + (1 - smoothing_factor) * smoothed_pan
+        )
+
+        smoothed_tilt = (
+            smoothing_factor * tilt_command
+            + (1 - smoothing_factor) * smoothed_tilt
+        )
+
         cv2.line(
             frame,
             (center_x, center_y),
@@ -89,19 +129,59 @@ while True:
             2,
         )
 
-        cv2.putText(
-            frame,
-            f"Error x: {error_x}, Error y: {error_y}",
-            (20, 40),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (255, 255, 255),
-            2,
-        )
-
         frame_height, frame_width, _ = frame.shape
 
         cv2.circle(frame, (x, y), 12, (0, 255, 0), -1)
+
+    else:
+        seconds_without_hand = time.monotonic() - last_hand_seen
+
+        if seconds_without_hand >= return_delay:
+            smoothed_pan = (1 - return_smoothing_factor) * smoothed_pan
+            smoothed_tilt = (1 - return_smoothing_factor) * smoothed_tilt
+
+    pan_angle = servo_center + smoothed_pan * max_pan_offset
+    tilt_angle = servo_center - smoothed_tilt * max_tilt_offset
+
+    pan_angle = int(round(max(30, min(150, pan_angle))))
+    tilt_angle = int(round(max(45, min(135, tilt_angle))))
+
+    # For arduino
+
+    servo_command = f"{pan_angle},{tilt_angle}\n"
+
+    serial_connection.write(servo_command.encode())
+    received_command = serial_connection.readline().decode().strip()
+
+    cv2.putText(
+        frame,
+        f"Serial: {servo_command.strip()} -> {received_command}",
+        (20, 100),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 255, 0),
+        2,
+    )
+
+    cv2.putText(
+        frame,
+        f"Pan angle: {pan_angle:.2f}, Tilt: {tilt_angle:.2f}",
+        (20, 70),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (0, 255, 255),
+        2,
+    )
+
+    cv2.putText(
+        frame,
+        f"Error x: {error_x}, Error y: {error_y}",
+        (20, 40),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 255, 255),
+        2,
+    )
 
     cv2.imshow("Camera", frame)
     key = cv2.waitKey(1)
@@ -109,6 +189,7 @@ while True:
     if key == ord("q"):
         break
 
+serial_connection.close()
 camera.release()
 hand_landmarker.close()
 cv2.destroyAllWindows()
