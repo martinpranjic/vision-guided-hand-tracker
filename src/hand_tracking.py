@@ -1,5 +1,5 @@
 import time
-
+import serial
 
 import cv2
 import mediapipe as mp
@@ -13,6 +13,7 @@ options = mp.tasks.vision.HandLandmarkerOptions(
 )
 
 hand_landmarker = mp.tasks.vision.HandLandmarker.create_from_options(options)
+serial_connection = serial.serial_for_url("loop://", timeout=1)
 
 camera = cv2.VideoCapture(0)
 
@@ -34,6 +35,9 @@ return_delay = 2.0
 last_hand_seen = time.monotonic()
 
 while True:
+    error_x = 0
+    error_y = 0
+
     success, frame = camera.read()
 
     if not success:
@@ -125,16 +129,6 @@ while True:
             2,
         )
 
-        cv2.putText(
-            frame,
-            f"Error x: {error_x}, Error y: {error_y}",
-            (20, 40),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (255, 255, 255),
-            2,
-        )
-
         frame_height, frame_width, _ = frame.shape
 
         cv2.circle(frame, (x, y), 12, (0, 255, 0), -1)
@@ -152,6 +146,23 @@ while True:
     pan_angle = int(round(max(30, min(150, pan_angle))))
     tilt_angle = int(round(max(45, min(135, tilt_angle))))
 
+    # For arduino
+
+    servo_command = f"{pan_angle},{tilt_angle}\n"
+
+    serial_connection.write(servo_command.encode())
+    received_command = serial_connection.readline().decode().strip()
+
+    cv2.putText(
+        frame,
+        f"Serial: {servo_command.strip()} -> {received_command}",
+        (20, 100),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 255, 0),
+        2,
+    )
+
     cv2.putText(
         frame,
         f"Pan angle: {pan_angle:.2f}, Tilt: {tilt_angle:.2f}",
@@ -162,12 +173,23 @@ while True:
         2,
     )
 
+    cv2.putText(
+        frame,
+        f"Error x: {error_x}, Error y: {error_y}",
+        (20, 40),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 255, 255),
+        2,
+    )
+
     cv2.imshow("Camera", frame)
     key = cv2.waitKey(1)
 
     if key == ord("q"):
         break
 
+serial_connection.close()
 camera.release()
 hand_landmarker.close()
 cv2.destroyAllWindows()
