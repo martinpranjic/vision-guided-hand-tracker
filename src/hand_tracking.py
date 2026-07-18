@@ -41,14 +41,65 @@ while True:
         timestamp_ms,
     )
 
+    frame_height, frame_width, _ = frame.shape
+
+    center_x = frame_width // 2
+    center_y = frame_height // 2
+
+    cv2.drawMarker(
+        frame,
+        (center_x, center_y),
+        (255, 255, 255),
+        cv2.MARKER_CROSS,
+        30,
+        2,
+    )
+
     if result.hand_landmarks:
         hand = result.hand_landmarks[0]
         index_finger_tip = hand[8]
 
-        frame_height, frame_width, _ = frame.shape
+        palm_x = (
+            hand[0].x
+            + hand[5].x
+            + hand[9].x
+            + hand[13].x
+            + hand[17].x
+        ) / 5
 
-        x = int(index_finger_tip.x * frame_width)
-        y = int(index_finger_tip.y * frame_height)
+        palm_y = (
+            hand[0].y
+            + hand[5].y
+            + hand[9].y
+            + hand[13].y
+            + hand[17].y
+        ) / 5
+
+        x = int(palm_x * frame_width)
+        y = int(palm_y * frame_height)
+
+        error_x = x - center_x
+        error_y = y - center_y
+
+        cv2.line(
+            frame,
+            (center_x, center_y),
+            (x, y),
+            (255, 0, 0),
+            2,
+        )
+
+        cv2.putText(
+            frame,
+            f"Error x: {error_x}, Error y: {error_y}",
+            (20, 40),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (255, 255, 255),
+            2,
+        )
+
+        frame_height, frame_width, _ = frame.shape
 
         cv2.circle(frame, (x, y), 12, (0, 255, 0), -1)
 
