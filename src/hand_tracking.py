@@ -23,6 +23,9 @@ smoothing_factor = 0.2
 
 smoothed_pan = 0.0
 smoothed_tilt = 0.0
+servo_center = 90
+max_pan_offset = 60
+max_tilt_offset = 45
 
 while True:
     success, frame = camera.read()
@@ -107,6 +110,12 @@ while True:
             + (1 - smoothing_factor) * smoothed_tilt
         )
 
+        pan_angle = servo_center + smoothed_pan * max_pan_offset
+        tilt_angle = servo_center - smoothed_tilt * max_tilt_offset
+
+        pan_angle = int(round(max(30, min(150, pan_angle))))
+        tilt_angle = int(round(max(45, min(135, tilt_angle))))
+
         cv2.line(
             frame,
             (center_x, center_y),
@@ -127,7 +136,7 @@ while True:
 
         cv2.putText(
             frame,
-            f"Pan: {smoothed_pan:.3f}, Tilt: {smoothed_tilt:.3f}",
+            f"Pan angle: {pan_angle:.2f}, Tilt: {tilt_angle:.2f}",
             (20, 70),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,
