@@ -19,6 +19,11 @@ camera = cv2.VideoCapture(0)
 if not camera.isOpened():
     raise RuntimeError("Could not open camera.")
 
+smoothing_factor = 0.2
+
+smoothed_pan = 0.0
+smoothed_tilt = 0.0
+
 while True:
     success, frame = camera.read()
 
@@ -92,6 +97,16 @@ while True:
         if abs(tilt_command) < dead_zone:
             tilt_command = 0.0
 
+        smoothed_pan = (
+            smoothing_factor * pan_command
+            + (1 - smoothing_factor) * smoothed_pan
+        )
+
+        smoothed_tilt = (
+            smoothing_factor * tilt_command
+            + (1 - smoothing_factor) * smoothed_tilt
+        )
+
         cv2.line(
             frame,
             (center_x, center_y),
@@ -112,7 +127,7 @@ while True:
 
         cv2.putText(
             frame,
-            f"Pan: {pan_command:.3f}, Tilt: {tilt_command:.3f}",
+            f"Pan: {smoothed_pan:.3f}, Tilt: {smoothed_tilt:.3f}",
             (20, 70),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,
